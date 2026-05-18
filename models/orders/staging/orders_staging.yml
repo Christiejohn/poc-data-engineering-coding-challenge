@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  # stg_orders — partially documented (the ambiguous ones are deliberately bare)
+  - name: stg_orders
+    description: One row per order. Sourced from raw.orders.
+    columns:
+      - name: order_id
+        description: Primary key. Stable across edits.
+        tests:
+          - unique
+          - not_null
+      - name: merchant_id
+        description: FK to lkp_merchants.merchant_id.
+      - name: order_status
+        # No description on purpose — undocumented enum.
+      - name: is_test
+        # No description on purpose — NULL/TRUE/FALSE ambiguity.
+      - name: ordered_at
+        description: When the order was placed (UTC).
+      - name: paid_at
+        description: When payment was authorized. NULL if order is pending or cancelled.
+      # customer_id intentionally omitted from docs
+
+  # stg_line_items — fully documented
+  - name: stg_line_items
+    description: One row per line item.
+    columns:
+      - name: line_item_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: FK to stg_orders.order_id.
+        tests:
+          - not_null
+      - name: product_id
+        description: FK to stg_products.product_id.
+      - name: quantity
+        description: Units ordered for this line.
+      - name: unit_price
+        description: Price per unit in dollars (decimal). Already converted from cents.
+      - name: line_status
+        description: One of `pending`, `fulfilled`, `cancelled`, `refunded`.
+
+  # stg_shipments — bare (undocumented)
+  - name: stg_shipments
+
+  # stg_shipment_line_items — bare (undocumented)
+  - name: stg_shipment_line_items
