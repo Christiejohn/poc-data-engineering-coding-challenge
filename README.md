@@ -20,7 +20,7 @@ make run      # dbt run (incremental)
 make full     # dbt run --full-refresh
 make test     # dbt test
 make lint     # sqlfluff lint
-make sql Q="select count(*) from order_fact"   # single-shot read-only query
+make sql Q="select count(*) from main_orders_dw.order_fact"   # single-shot read-only query
 ```
 
 ## Where things live
