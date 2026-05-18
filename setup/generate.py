@@ -453,6 +453,48 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
     return shopify_rows, stripe_rows, pos_rows, plant_log
 
 
+def load_duckdb() -> None:
+    if DB_PATH.exists():
+        DB_PATH.unlink()
+    con = duckdb.connect(str(DB_PATH))
+    con.execute("create schema if not exists raw")
+    csv_tables = [
+        "merchants", "products",
+        "orders", "line_items", "shipments", "shipment_line_items",
+        "refunds_shopify", "refunds_stripe", "refunds_internal_pos",
+    ]
+    for name in csv_tables:
+        path = (RAW_DIR / f"{name}.csv").as_posix()
+        con.execute(
+            f"create or replace table raw.{name} as "
+            f"select * from read_csv_auto('{path}', header=true)"
+        )
+    con.close()
+
+
+def compute_reconciliation_amount(con: duckdb.DuckDBPyConnection) -> tuple[float, float]:
+    """Returns (total_revenue_all_orders, total_revenue_non_test_orders) in dollars."""
+    total_all = con.execute("""
+        select sum(quantity * unit_price_in_cents) / 100.0
+        from raw.line_items
+    """).fetchone()[0]
+    total_non_test = con.execute("""
+        select sum(li.quantity * li.unit_price_in_cents) / 100.0
+        from raw.line_items li
+        join raw.orders o on o.order_id = li.order_id
+        where coalesce(lower(cast(o.is_test as varchar)), 'false') != 'true'
+    """).fetchone()[0]
+    return float(total_all), float(total_non_test)
+
+
+def render_ticket(non_test_amount: float) -> None:
+    if not TEMPLATE_PATH.exists():
+        raise FileNotFoundError(f"missing template: {TEMPLATE_PATH}")
+    body = TEMPLATE_PATH.read_text()
+    body = body.replace("{{ NON_TEST_REVENUE }}", f"{non_test_amount:,.2f}")
+    TICKET_PATH.write_text(body)
+
+
 def write_answer_key(mismatch_plants: list[tuple[str, str]],
                      refund_plants: list[tuple[str, str]],
                      reconciliation_amount: float) -> None:
@@ -589,9 +631,19 @@ def main() -> None:
         pos,
     )
 
-    # DATA-123 render added in later task.
+    print("loading DuckDB warehouse...")
+    load_duckdb()
 
-    write_answer_key(mismatch_plants, refund_plants, reconciliation_amount=0.0)
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    try:
+        total_all, total_non_test = compute_reconciliation_amount(con)
+    finally:
+        con.close()
+
+    print(f"reconciliation: total ${total_all:,.2f} | non-test ${total_non_test:,.2f}")
+
+    render_ticket(total_non_test)
+    write_answer_key(mismatch_plants, refund_plants, total_non_test)
 
     print("done.")
 
