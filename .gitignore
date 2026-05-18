@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Generated data + warehouse
+raw/
+warehouse.duckdb
+warehouse.duckdb.wal
+
+# dbt
+target/
+dbt_packages/
+logs/
+
+# Generated ticket (template is committed; rendered file is not)
+DATA-123.md
+
+# Interview build plans + scratch — never ships with the candidate repo
+docs/superpowers/
+
+# OS
+.DS_Store
+
+# Autonomous build artifacts — plan, logs, config; never ships with candidate repo
+.autonomous/
