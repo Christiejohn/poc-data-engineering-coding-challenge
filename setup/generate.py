@@ -75,6 +75,127 @@ def gen_products(rng: random.Random, fake: Faker) -> list[list]:
     return rows
 
 
+@dataclass
+class Order:
+    order_id: str
+    merchant_id: str
+    customer_id: str
+    order_status: str
+    is_test: str           # "" (NULL) | "true" | "false"
+    ordered_at: datetime
+    paid_at: datetime | None
+    shape: str             # "single" | "multi_full" | "partial" | "pending" | "cancelled"
+
+
+@dataclass
+class LineItem:
+    line_item_id: str
+    order_id: str
+    product_id: str
+    quantity: int
+    unit_price_in_cents: int
+    line_status: str
+
+
+@dataclass
+class Shipment:
+    shipment_id: str
+    order_id: str
+    shipped_at: datetime
+
+
+@dataclass
+class ShipmentLineItem:
+    shipment_line_item_id: str
+    shipment_id: str
+    line_item_id: str
+    quantity_shipped: int
+
+
+def gen_orders_and_lines(
+    rng: random.Random,
+    products: list[list],
+) -> tuple[list[Order], list[LineItem]]:
+    """Generate orders + their line items. line_status defaults to 'pending' for
+    pending/cancelled shapes; Task 5b overwrites it for shipped/partial shapes."""
+    product_prices = {p[0]: p[2] for p in products}
+    product_ids = list(product_prices.keys())
+
+    orders: list[Order] = []
+    lines: list[LineItem] = []
+    next_line_id = 1
+
+    for i in range(1, N_ORDERS + 1):
+        order_id = f"O{i:06d}"
+        merchant_id = f"M{rng.randint(1, N_MERCHANTS):05d}"
+        customer_id = f"C{rng.randint(1, N_MERCHANTS * 4):06d}"
+
+        # is_test: ~95% NULL (empty), ~3% true, ~2% false
+        r = rng.random()
+        if r < 0.95:
+            is_test = ""
+        elif r < 0.98:
+            is_test = "true"
+        else:
+            is_test = "false"
+
+        ordered_at = random_dt(rng, START_DATE, END_DATE - timedelta(days=14))
+
+        s = rng.random()
+        if s < 0.70:
+            shape = "single"
+        elif s < 0.82:
+            shape = "multi_full"
+        elif s < 0.90:
+            shape = "partial"
+        elif s < 0.95:
+            shape = "pending"
+        else:
+            shape = "cancelled"
+
+        # Order-level status + paid_at
+        if shape == "cancelled":
+            order_status = "cancelled"
+            paid_at = None
+            default_line_status = "cancelled"
+        elif shape == "pending":
+            order_status = "pending"
+            paid_at = ordered_at + timedelta(minutes=rng.randint(1, 120))
+            default_line_status = "pending"
+        elif shape == "partial":
+            order_status = "partially_shipped"
+            paid_at = ordered_at + timedelta(minutes=rng.randint(1, 120))
+            default_line_status = "pending"  # Task 5b overwrites per-line
+        else:  # single, multi_full
+            order_status = "shipped"
+            paid_at = ordered_at + timedelta(minutes=rng.randint(1, 120))
+            default_line_status = "fulfilled"  # Task 5b confirms
+
+        # 1–4 line items per order, weighted toward 1–2
+        n_lines = rng.choices([1, 2, 3, 4], weights=[40, 35, 20, 5])[0]
+        for _ in range(n_lines):
+            li_id = f"L{next_line_id:07d}"
+            next_line_id += 1
+            pid = rng.choice(product_ids)
+            qty = rng.randint(1, 5)
+            # unit_price = list_price * uniform(0.85, 1.0) — revenue isn't purely list price
+            unit_price = int(product_prices[pid] * rng.uniform(0.85, 1.0))
+            lines.append(LineItem(li_id, order_id, pid, qty, unit_price, default_line_status))
+
+        orders.append(Order(
+            order_id=order_id,
+            merchant_id=merchant_id,
+            customer_id=customer_id,
+            order_status=order_status,
+            is_test=is_test,
+            ordered_at=ordered_at,
+            paid_at=paid_at,
+            shape=shape,
+        ))
+
+    return orders, lines
+
+
 def main() -> None:
     rng = random.Random(SEED)
     fake = Faker()
@@ -94,7 +215,32 @@ def main() -> None:
         gen_products(rng, fake),
     )
 
-    # Orders / line_items / shipments / shipment_line_items / refunds added in later tasks.
+    print("generating orders + line items...")
+    products_rows = []
+    with (RAW_DIR / "products.csv").open() as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            products_rows.append([row[0], row[1], int(row[2])])
+    orders, lines = gen_orders_and_lines(rng, products_rows)
+
+    write_csv(
+        "orders",
+        ["order_id", "merchant_id", "customer_id", "order_status", "is_test",
+         "ordered_at", "paid_at"],
+        [[o.order_id, o.merchant_id, o.customer_id, o.order_status, o.is_test,
+          o.ordered_at.isoformat(),
+          o.paid_at.isoformat() if o.paid_at else ""] for o in orders],
+    )
+    write_csv(
+        "line_items",
+        ["line_item_id", "order_id", "product_id", "quantity",
+         "unit_price_in_cents", "line_status"],
+        [[li.line_item_id, li.order_id, li.product_id, li.quantity,
+          li.unit_price_in_cents, li.line_status] for li in lines],
+    )
+
+    # Shipments / shipment_line_items / refunds added in later tasks.
     # DATA-123 render added in later task.
 
     print("done.")
