@@ -1,4 +1,4 @@
 {{ config(materialized='view') }}
 
-select *
-from {{ source('raw', 'line_items') }}
+SELECT *
+FROM {{ source('raw', 'line_items') }}

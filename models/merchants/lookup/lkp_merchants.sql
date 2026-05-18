@@ -1,9 +1,9 @@
 {{ config(materialized='table') }}
 
-select
+SELECT
     merchant_id
     , merchant_name
     , customer_type
     , tier
     , merchant_created_at
-from {{ ref('stg_merchants') }}
+FROM {{ ref('stg_merchants') }}

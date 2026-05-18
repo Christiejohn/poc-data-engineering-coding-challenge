@@ -1,11 +1,11 @@
 {{ config(materialized='view') }}
 
-select
+SELECT
     order_id
     , merchant_id
     , customer_id
     , order_status
     , is_test
-    , cast(ordered_at as timestamp) as ordered_at
-    , cast(paid_at as timestamp) as paid_at
-from {{ ref('base_orders') }}
+    , CAST(ordered_at AS timestamp) AS ordered_at
+    , CAST(paid_at AS timestamp) AS paid_at
+FROM {{ ref('base_orders') }}

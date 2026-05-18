@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
-select
+SELECT
     shipment_id
     , order_id
-    , cast(shipped_at as timestamp) as shipped_at
-from {{ ref('base_shipments') }}
+    , CAST(shipped_at AS timestamp) AS shipped_at
+FROM {{ ref('base_shipments') }}

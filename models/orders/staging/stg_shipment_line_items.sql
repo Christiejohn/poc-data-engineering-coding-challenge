@@ -1,8 +1,8 @@
 {{ config(materialized='view') }}
 
-select
+SELECT
     shipment_line_item_id
     , shipment_id
     , line_item_id
     , quantity_shipped
-from {{ ref('base_shipment_line_items') }}
+FROM {{ ref('base_shipment_line_items') }}

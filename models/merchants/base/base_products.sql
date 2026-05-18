@@ -1,2 +1,4 @@
 {{ config(materialized='view') }}
-select * from {{ source('raw', 'products') }}
+
+SELECT *
+FROM {{ source('raw', 'products') }}

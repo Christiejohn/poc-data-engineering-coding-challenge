@@ -1,0 +1,28 @@
+[sqlfluff]
+templater = dbt
+dialect = duckdb
+large_file_skip_byte_limit = 0
+# structure.column_order - Select wildcards then simple targets before calculations and aggregates.
+# structure.using - Found USING statement. Expected only ON statements.
+exclude_rules = structure.column_order, structure.using
+max_line_length = 120
+
+[sqlfluff:indentation]
+tab_space_size = 4
+allow_implicit_indents = True
+[sqlfluff:layout:type:comma]
+line_position = leading
+[sqlfluff:rules:capitalisation.keywords] # key-words
+capitalisation_policy = upper
+[sqlfluff:rules:capitalisation.functions]  # Function names
+capitalisation_policy = lower
+[sqlfluff:rules:capitalisation.identifiers] # identifiers
+extended_capitalisation_policy = lower
+[sqlfluff:rules:structure.subquery]
+forbid_subquery_in = both
+[sqlfluff:rules:convention.count_rows]  # Consistent syntax to count all rows
+prefer_count_1 = True
+[sqlfluff:rules:ambiguous.column_references]  # GROUP BY/ORDER BY column references.
+group_by_and_order_by_style = explicit
+[sqlfluff:templater:dbt]
+profile = dbt_duckdb

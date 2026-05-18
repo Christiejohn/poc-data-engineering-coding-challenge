@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
-select
+SELECT
     product_id
     , product_name
-    , list_price_in_cents / 100.0 as list_price
-from {{ ref('base_products') }}
+    , list_price_in_cents / 100.0 AS list_price
+FROM {{ ref('base_products') }}

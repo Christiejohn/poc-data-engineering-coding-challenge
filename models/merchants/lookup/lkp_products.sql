@@ -1,7 +1,7 @@
 {{ config(materialized='table') }}
 
-select
+SELECT
     product_id
     , product_name
     , list_price
-from {{ ref('stg_products') }}
+FROM {{ ref('stg_products') }}
