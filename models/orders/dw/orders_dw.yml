@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: order_fact
+    description: One row per order with revenue and shipment metadata.
+    columns:
+      - name: order_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: merchant_id
+        description: FK to lkp_merchants.
+      - name: merchant_name
+      - name: customer_id
+      - name: customer_type
+      - name: order_status
+      - name: is_test
+      - name: ordered_at
+      - name: paid_at
+      - name: shipped_at
+        description: First shipment's `shipped_at`. NULL if no shipments yet.
+      - name: shipment_count
+      - name: line_count
+      - name: total_quantity
+      - name: revenue
+        description: '{{ doc("order_fact_revenue") }}'
+      - name: created_at_dwh
+      - name: updated_at_dwh
+
+  - name: order_line_fact
+    description: |
+      Skeleton — one row per order line. Will be extended with refund allocations
+      in DATA-456 (Problem 2 / refunds work).
+    columns:
+      - name: line_item_id
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+      - name: product_id
+      - name: quantity
+      - name: unit_price
+      - name: line_revenue
