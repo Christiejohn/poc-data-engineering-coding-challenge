@@ -196,6 +196,101 @@ def gen_orders_and_lines(
     return orders, lines
 
 
+def gen_shipments(
+    rng: random.Random,
+    orders: list[Order],
+    lines: list[LineItem],
+) -> tuple[list[Shipment], list[ShipmentLineItem]]:
+    """Build shipments + shipment_line_items per the per-order shape. Mutates
+    lines[].line_status where the shape implies a non-default status (partials).
+    Enforces invariant: sum(quantity_shipped per line) ≤ line.quantity."""
+    lines_by_order: dict[str, list[LineItem]] = {}
+    for li in lines:
+        lines_by_order.setdefault(li.order_id, []).append(li)
+
+    shipments: list[Shipment] = []
+    ship_lines: list[ShipmentLineItem] = []
+    next_ship_id = 1
+    next_ship_line_id = 1
+
+    for o in orders:
+        if o.shape in ("pending", "cancelled"):
+            continue  # no shipments
+
+        order_lines = lines_by_order[o.order_id]
+
+        if o.shape == "single":
+            ship_dt = o.ordered_at + timedelta(days=rng.randint(1, 14))
+            sid = f"S{next_ship_id:07d}"
+            next_ship_id += 1
+            shipments.append(Shipment(sid, o.order_id, ship_dt))
+            for li in order_lines:
+                ship_lines.append(ShipmentLineItem(
+                    f"SL{next_ship_line_id:08d}", sid, li.line_item_id, li.quantity
+                ))
+                next_ship_line_id += 1
+                li.line_status = "fulfilled"
+
+        elif o.shape == "multi_full":
+            # 2–3 shipments. First: 1–14 days; subsequent: 15–60 days after first.
+            # 15–60 day gap forces month-boundary spread for many cases.
+            ship_count = rng.choice([2, 3])
+            first_dt = o.ordered_at + timedelta(days=rng.randint(1, 14))
+            ship_dts = [first_dt]
+            for _ in range(ship_count - 1):
+                ship_dts.append(first_dt + timedelta(days=rng.randint(15, 60)))
+            ship_dts = [min(d, END_DATE) for d in ship_dts]
+            sids = []
+            for dt in ship_dts:
+                sid = f"S{next_ship_id:07d}"
+                next_ship_id += 1
+                sids.append(sid)
+                shipments.append(Shipment(sid, o.order_id, dt))
+
+            for li in order_lines:
+                # Split qty across shipments. Last shipment takes the remainder.
+                remaining = li.quantity
+                for k, sid in enumerate(sids):
+                    if k == len(sids) - 1:
+                        take = remaining
+                    else:
+                        take = rng.randint(0, remaining)
+                    if take > 0:
+                        ship_lines.append(ShipmentLineItem(
+                            f"SL{next_ship_line_id:08d}", sid, li.line_item_id, take
+                        ))
+                        next_ship_line_id += 1
+                        remaining -= take
+                li.line_status = "fulfilled"
+
+        else:  # partial
+            ship_dt = o.ordered_at + timedelta(days=rng.randint(1, 14))
+            sid = f"S{next_ship_id:07d}"
+            next_ship_id += 1
+            shipments.append(Shipment(sid, o.order_id, ship_dt))
+
+            for li in order_lines:
+                pick = rng.choice(["full", "part", "pending"])
+                if pick == "full":
+                    ship_lines.append(ShipmentLineItem(
+                        f"SL{next_ship_line_id:08d}", sid, li.line_item_id, li.quantity
+                    ))
+                    next_ship_line_id += 1
+                    li.line_status = "fulfilled"
+                elif pick == "part" and li.quantity > 1:
+                    take = li.quantity - 1
+                    ship_lines.append(ShipmentLineItem(
+                        f"SL{next_ship_line_id:08d}", sid, li.line_item_id, take
+                    ))
+                    next_ship_line_id += 1
+                    li.line_status = "pending"  # not fully fulfilled
+                else:
+                    # "pending" pick OR single-qty falling into "part" — leave unshipped
+                    li.line_status = "pending"
+
+    return shipments, ship_lines
+
+
 def main() -> None:
     rng = random.Random(SEED)
     fake = Faker()
@@ -240,7 +335,30 @@ def main() -> None:
           li.unit_price_in_cents, li.line_status] for li in lines],
     )
 
-    # Shipments / shipment_line_items / refunds added in later tasks.
+    print("generating shipments...")
+    shipments, ship_lines = gen_shipments(rng, orders, lines)
+
+    # Re-write line_items since gen_shipments may have updated line_status
+    write_csv(
+        "line_items",
+        ["line_item_id", "order_id", "product_id", "quantity",
+         "unit_price_in_cents", "line_status"],
+        [[li.line_item_id, li.order_id, li.product_id, li.quantity,
+          li.unit_price_in_cents, li.line_status] for li in lines],
+    )
+    write_csv(
+        "shipments",
+        ["shipment_id", "order_id", "shipped_at"],
+        [[s.shipment_id, s.order_id, s.shipped_at.isoformat()] for s in shipments],
+    )
+    write_csv(
+        "shipment_line_items",
+        ["shipment_line_item_id", "shipment_id", "line_item_id", "quantity_shipped"],
+        [[sl.shipment_line_item_id, sl.shipment_id, sl.line_item_id, sl.quantity_shipped]
+         for sl in ship_lines],
+    )
+
+    # Refunds added in later task.
     # DATA-123 render added in later task.
 
     print("done.")
