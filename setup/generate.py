@@ -592,7 +592,16 @@ def main() -> None:
 
     print(f"planted {len(mismatch_plants)} status mismatches")
 
-    # Re-write line_items since gen_shipments may have updated line_status
+    # Re-write orders + line_items since gen_shipments and mismatch plants
+    # may have mutated order_status / line_status after the initial writes.
+    write_csv(
+        "orders",
+        ["order_id", "merchant_id", "customer_id", "order_status", "is_test",
+         "ordered_at", "paid_at"],
+        [[o.order_id, o.merchant_id, o.customer_id, o.order_status, o.is_test,
+          o.ordered_at.isoformat(),
+          o.paid_at.isoformat() if o.paid_at else ""] for o in orders],
+    )
     write_csv(
         "line_items",
         ["line_item_id", "order_id", "product_id", "quantity",
