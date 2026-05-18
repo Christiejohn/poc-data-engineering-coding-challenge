@@ -32,8 +32,8 @@ N_MERCHANTS = 5_000
 N_PRODUCTS = 500
 N_ORDERS = 10_000
 
-CUSTOMER_TYPES = ["B2B", "B2C", "MKT"]   # MKT is "marketplace"; intentionally undocumented
-TIERS = ["STD", "ENT", "PLT"]            # standard / enterprise / platinum; intentionally undocumented
+CUSTOMER_TYPES = ["B2B", "B2C", "MKT"]
+TIERS = ["STD", "ENT", "PLT"]
 
 
 def random_dt(rng: random.Random, start: datetime, end: datetime) -> datetime:
@@ -115,12 +115,12 @@ class ShipmentLineItem:
 @dataclass
 class RefundPlan:
     merchant_id: str
-    pattern: str  # "shopify_only" | "stripe_only" | "internal_pos_only" | "shopify_stripe" | "none"
+    pattern: str
 
 
 def pick_refund_merchants(rng: random.Random, orders: list[Order]) -> list[RefundPlan]:
-    """Select merchants for each refund pattern. Picks lowest-numbered merchants that
-    have enough eligible orders. shopify_stripe requires ≥2 to guarantee 2 split-tenders."""
+    """Assign each merchant in turn to the next refund pattern in the rotation.
+    Picks lowest-numbered merchants that have enough eligible orders."""
     eligible: dict[str, int] = {}
     for o in orders:
         if o.order_status in ("shipped", "partially_shipped") and o.is_test != "true":
@@ -326,9 +326,12 @@ def gen_shipments(
 
 def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                 orders: list[Order], lines: list[LineItem]) -> tuple[
-    list[list], list[list], list[list], list[tuple[str, str]]
+    list[list], list[list], list[list], list[tuple[str, str, dict]]
 ]:
-    """Generate refunds across 3 sources. Returns (shopify, stripe, internal_pos, plant_log)."""
+    """Generate refunds across 3 sources. Returns (shopify, stripe, internal_pos, notable_log).
+
+    notable_log entries are (order_id, code, payload) — opaque tokens; the
+    human-readable mapping lives in the interviewer-only renderer."""
     by_merchant: dict[str, list[Order]] = {}
     for o in orders:
         # is_test is "" (NULL) | "true" | "false" — treat anything except "true" as non-test
@@ -341,7 +344,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
     shopify_rows = []
     stripe_rows = []
     pos_rows = []
-    plant_log: list[tuple[str, str]] = []
+    notable_log: list[tuple[str, str, dict]] = []
 
     next_event_id = 1
 
@@ -353,9 +356,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
         if not candidates:
             continue
 
-        # Subsample: refund ~5% of eligible orders (min 1 for active patterns)
         n_refunds = max(1, int(len(candidates) * 0.05)) if plan.pattern != "none" else 0
-        # shopify_stripe needs ≥2 sampled orders to guarantee 2 split-tender plants
         if plan.pattern == "shopify_stripe":
             n_refunds = min(max(2, n_refunds), 30)
         sampled = rng.sample(candidates, min(n_refunds, len(candidates)))
@@ -369,8 +370,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
 
             if plan.pattern == "shopify_only":
                 target = rng.choice(order_lines)
-                partial_roll = rng.random()  # always consume rng for determinism
-                # For first order: guarantee a partial-line plant using any line with qty>1
+                partial_roll = rng.random()
                 if idx == 0:
                     plant_target = next(
                         (li for li in order_lines if li.quantity > 1), None
@@ -378,7 +378,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                     if plant_target is not None:
                         qty = 1
                         amt = qty * plant_target.unit_price_in_cents
-                        plant_log.append((o.order_id, f"shopify partial-line refund: 1 of {plant_target.quantity}"))
+                        notable_log.append((o.order_id, "P_QTY", {"qty": plant_target.quantity}))
                         shopify_rows.append([
                             f"SHF{next_event_id:06d}", o.order_id, plant_target.line_item_id,
                             qty, amt, refunded_at.isoformat()
@@ -387,7 +387,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                         continue
                 if partial_roll < 0.2 and target.quantity > 1:
                     qty = 1
-                    plant_log.append((o.order_id, f"shopify partial-line refund: 1 of {target.quantity}"))
+                    notable_log.append((o.order_id, "P_QTY", {"qty": target.quantity}))
                 else:
                     qty = target.quantity
                 amt = qty * target.unit_price_in_cents
@@ -398,7 +398,6 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                 next_event_id += 1
 
             elif plan.pattern == "stripe_only":
-                # One payment-event row per refund. Tender = "card".
                 stripe_rows.append([
                     f"STR{next_event_id:06d}", o.order_id, "card",
                     total, refunded_at.isoformat()
@@ -406,18 +405,14 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                 next_event_id += 1
 
             elif plan.pattern == "internal_pos_only":
-                # Order-level only. Note: plant 1 with order_status mismatch.
                 pos_rows.append([
                     f"POS{next_event_id:06d}", o.order_id, total, refunded_at.isoformat()
                 ])
                 next_event_id += 1
                 if idx == 0:
-                    plant_log.append((o.order_id,
-                        "internal_pos: order-level refund where line statuses still 'fulfilled' "
-                        "(cancel-vs-refund nuance)"))
+                    notable_log.append((o.order_id, "P_POS", {}))
 
             elif plan.pattern == "shopify_stripe":
-                # Both witnesses. Plant 2 split-tender refunds among the first two.
                 target = rng.choice(order_lines)
                 qty = target.quantity
                 amt = qty * target.unit_price_in_cents
@@ -428,7 +423,6 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                 next_event_id += 1
 
                 if idx < 2:
-                    # Split tender: half CC, half store_credit
                     half = amt // 2
                     stripe_rows.append([
                         f"STR{next_event_id:06d}", o.order_id, "card",
@@ -440,9 +434,8 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                         amt - half, refunded_at.isoformat()
                     ])
                     next_event_id += 1
-                    plant_log.append((o.order_id,
-                        f"shopify_stripe split-tender: ${amt/100:.2f} = "
-                        f"${half/100:.2f} card + ${(amt-half)/100:.2f} store_credit"))
+                    notable_log.append((o.order_id, "P_SPLIT",
+                        {"amt": amt, "half": half, "rest": amt - half}))
                 else:
                     stripe_rows.append([
                         f"STR{next_event_id:06d}", o.order_id, "card",
@@ -450,7 +443,7 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
                     ])
                     next_event_id += 1
 
-    return shopify_rows, stripe_rows, pos_rows, plant_log
+    return shopify_rows, stripe_rows, pos_rows, notable_log
 
 
 def load_duckdb() -> None:
@@ -495,34 +488,26 @@ def render_ticket(non_test_amount: float) -> None:
     TICKET_PATH.write_text(body)
 
 
-def write_answer_key(mismatch_plants: list[tuple[str, str]],
-                     refund_plants: list[tuple[str, str]],
-                     reconciliation_amount: float) -> None:
-    path = ROOT / "docs" / "interviewer" / "answer-key.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines_out = [
-        "# Interviewer Answer Key",
-        "",
-        "**Internal only — do not share with candidates.** Regenerated by `setup/generate.py`.",
-        "",
-        "## Problem 1 — planted facts",
-        "",
-        f"- Reconciliation discrepancy in DATA-123 (gross of test orders): see ticket.",
-        f"- Reconciliation discrepancy excluding test orders: see ticket.",
-        f"- True reconciled non-test revenue: ${reconciliation_amount:,.2f}",
-        "",
-        "## Status mismatches (5–10 planted, design doc line 385)",
-        "",
-    ]
-    for oid, kind in mismatch_plants:
-        lines_out.append(f"- `{oid}` — {kind}")
-    lines_out.append("")
-    lines_out.append("## Problem 2 — refund plants")
-    lines_out.append("")
-    for oid, kind in refund_plants:
-        lines_out.append(f"- `{oid}` — {kind}")
-    lines_out.append("")
-    path.write_text("\n".join(lines_out))
+def _try_write_interviewer_key(
+    mismatch_log: list[tuple[str, str]],
+    refund_log: list[tuple[str, str, dict]],
+    reconciliation_amount: float,
+) -> None:
+    """Dynamically invoke the interviewer-only renderer when it ships with the
+    repo. The handoff workflow removes `docs/interviewer/` before sending the
+    repo to a candidate, so this no-ops cleanly on the candidate's machine."""
+    import importlib.util
+
+    module_path = ROOT / "docs" / "interviewer" / "_answer_key.py"
+    out_path = ROOT / "docs" / "interviewer" / "answer-key.md"
+    if not module_path.exists():
+        return
+    spec = importlib.util.spec_from_file_location("_interviewer_answer_key", module_path)
+    if spec is None or spec.loader is None:
+        return
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.write_answer_key(out_path, mismatch_log, refund_log, reconciliation_amount)
 
 
 def main() -> None:
@@ -572,28 +557,20 @@ def main() -> None:
     print("generating shipments...")
     shipments, ship_lines = gen_shipments(rng, orders, lines)
 
-    # Plant 7 deliberate order-vs-line status mismatches (logged in answer key).
-    # Pattern: order_status says "fulfilled" but a line says "cancelled", or order says
-    # "partially_cancelled" but lines all "fulfilled". Both directions tested.
-    mismatch_plants = []
+    mismatch_log: list[tuple[str, str]] = []
     candidate_indices = [i for i, o in enumerate(orders) if o.order_status == "shipped"][:7]
     for idx, order_idx in enumerate(candidate_indices):
         o = orders[order_idx]
-        # Pick the first line of this order
         first_line_idx = next(j for j, li in enumerate(lines) if li.order_id == o.order_id)
         if idx % 2 == 0:
-            # Direction A: order says shipped, one line says cancelled
             lines[first_line_idx].line_status = "cancelled"
-            mismatch_plants.append((o.order_id, "order=shipped, line=cancelled"))
+            mismatch_log.append((o.order_id, "M_A"))
         else:
-            # Direction B: order says partially_cancelled but no lines actually cancelled
             orders[order_idx].order_status = "partially_cancelled"
-            mismatch_plants.append((o.order_id, "order=partially_cancelled, all lines fulfilled"))
+            mismatch_log.append((o.order_id, "M_B"))
 
-    print(f"planted {len(mismatch_plants)} status mismatches")
-
-    # Re-write orders + line_items since gen_shipments and mismatch plants
-    # may have mutated order_status / line_status after the initial writes.
+    # Re-write orders + line_items since gen_shipments and the mismatch loop
+    # above may have mutated order_status / line_status after the initial writes.
     write_csv(
         "orders",
         ["order_id", "merchant_id", "customer_id", "order_status", "is_test",
@@ -623,7 +600,7 @@ def main() -> None:
 
     print("generating refunds...")
     plans = pick_refund_merchants(rng, orders)
-    shf, str_, pos, refund_plants = gen_refunds(rng, plans, orders, lines)
+    shf, str_, pos, refund_log = gen_refunds(rng, plans, orders, lines)
     write_csv(
         "refunds_shopify",
         ["refund_id", "order_id", "line_item_id", "qty_refunded", "amount_in_cents", "refunded_at"],
@@ -652,7 +629,7 @@ def main() -> None:
     print(f"reconciliation: total ${total_all:,.2f} | non-test ${total_non_test:,.2f}")
 
     render_ticket(total_non_test)
-    write_answer_key(mismatch_plants, refund_plants, total_non_test)
+    _try_write_interviewer_key(mismatch_log, refund_log, total_non_test)
 
     print("done.")
 
