@@ -417,9 +417,9 @@ Five primary dimensions, weighted roughly equally:
 - Did they identify `shipped_at` on `order_fact` as the architectural smell that enabled the bug? (Top-tier principal signal.)
 - Did their Problem 2 design name testable invariants — reconciliation, allocation, source-overlap?
 
-## Build checklist (✓ complete)
+## Build checklist (near-complete)
 
-Historical record of the build. Kept for reference; everything below is in the repo as of the last commit.
+Historical build record. Kept for reference; all implementation artifacts are in-repo, with dry-run still pending.
 
 - [x] Seed generator (`setup/generate.py`) — emits CSVs, loads to DuckDB, renders `DATA-123.md` from template, logs internal answer key
 - [x] SQL runner (`setup/sql.py`) — read-only, single-shot, agent-friendly

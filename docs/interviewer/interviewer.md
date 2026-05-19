@@ -90,7 +90,7 @@ Then stop. Do not add context. Do not say "write a design doc." Do not say "this
 
 > *"Before we close out — walk us through what you'd bring to the finance analytics team for sign-off before this hits prod."*
 
-**Deliberately format-neutral** — code, design doc, whiteboard, slack message all valid. **Do not** say "write a design doc" — that collapses the test.
+**Deliberately format-neutral** — code, design doc, whiteboard, Slack message all valid. **Do not** say "write a design doc" — that collapses the test.
 
 **Cross-check data:** Cross-check candidate's work against the planted refund cases in [`answer-key.md`](./answer-key.md). Patterns to verify: Shopify partial-line refund, internal_pos order-level refund (line statuses still 'fulfilled'), shopify_stripe split-tender (card + store_credit).
 
