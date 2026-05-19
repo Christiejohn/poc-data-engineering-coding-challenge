@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_merchants
+    description: One row per merchant.
+    columns:
+      - name: merchant_id
+        tests:
+          - unique
+          - not_null
+      - name: customer_type
+        # Intentionally undocumented — B2B/B2C/MKT ambiguity.
+      - name: tier
+        # Intentionally undocumented — STD/ENT/PLT ambiguity.
+  - name: stg_products

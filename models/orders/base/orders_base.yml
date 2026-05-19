@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: orders
+      - name: line_items
+      - name: shipments
+        # TODO: enable source freshness once upstream loader is reliable
+        # freshness:
+        #   warn_after: {count: 24, period: hour}
+        #   error_after: {count: 48, period: hour}
+        # loaded_at_field: ordered_at
+      - name: shipment_line_items
+      - name: merchants
+      - name: products

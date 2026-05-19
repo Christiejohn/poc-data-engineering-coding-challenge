@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Generated warehouse (rebuild via `make setup`)
+warehouse.duckdb
+warehouse.duckdb.wal
+
+# dbt
+target/
+dbt_packages/
+logs/
+.user.yml
+
+# Interview build plans + scratch — never ships with the candidate repo
+docs/superpowers/
+
+# OS
+.DS_Store
+
+# Autonomous build artifacts — plan, logs, config; never ships with candidate repo
+.autonomous/
+
+# Mock-interview test runs — local-only, never ships
+.tmp/
