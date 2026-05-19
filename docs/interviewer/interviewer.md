@@ -29,8 +29,8 @@ regenerate seeds (`make seed`), update both to match `answer-key.md`. -->
 | Minutes | Phase | Notes |
 |---|---|---|
 | 0–5 | Setup & orient | Candidate reads `README.md` and `DATA-123.md`. Don't fill silence. |
-| 5–30 | Problem 1 (grain bug) | ~15 min for strong candidates; 25 min = "struggling against the floor." |
-| 30–55 | Problem 2 (refunds) | Asymmetric budget is deliberate — P2 is the design problem. |
+| 5–20 | Problem 1 (grain bug) | **Target: ~15 min.** If still working at 20, let it run to ~30 — but it eats P2 time. 25+ min on P1 = "struggling against the floor." |
+| 20–55 | Problem 2 (refunds) | **Protect this block.** P2 is the design problem and the Principal signal. Asymmetric budget is deliberate. |
 | 55–60 | Wrap + candidate Qs | Hard stop. |
 
 P1 sets a code-shipping rhythm; P2 deliberately breaks it. **Whether the candidate notices the shape change is itself the test.**
