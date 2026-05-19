@@ -25,3 +25,6 @@ docs/superpowers/
 
 # Autonomous build artifacts — plan, logs, config; never ships with candidate repo
 .autonomous/
+
+# Mock-interview test runs — local-only, never ships
+.tmp/
