@@ -15,6 +15,7 @@ logs/
 
 # Interview build plans + scratch — never ships with the candidate repo
 docs/superpowers/
+docs/interviewer/
 
 # OS
 .DS_Store
