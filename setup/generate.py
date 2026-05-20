@@ -340,6 +340,8 @@ def gen_refunds(rng: random.Random, plans: list[RefundPlan],
             by_merchant.setdefault(o.merchant_id, []).append(o)
     by_order: dict[str, list[LineItem]] = {}
     for li in lines:
+        if li.line_status == "cancelled":
+            continue
         by_order.setdefault(li.order_id, []).append(li)
 
     shopify_rows = []

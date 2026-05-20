@@ -66,25 +66,31 @@ What did the candidate do with the warn-level reconciliation test (`tests/order_
 | 4 | Escalated to `error` AND added at least one new test (e.g., a row-level parity check) covering the regression. |
 | 5 | Wrote a row-level parity invariant (per-order revenue == sum of its line items) as a generic/reusable test, escalated severity, and the test would have caught the original bug. |
 
-### A3. Problem 2 — Refund model structure
+### A3. Problem 2 — Refund model structure (graded from the plan, not the code)
 
-Did the candidate propose or build a `refund_fact` model rather than dumping refund columns onto `order_fact`?
+**Q2 is presentation-graded.** The candidate is presenting a plan to finance analytics for how DE would model refunds. Building the models is bonus. Score the **plan** they walk through — the rubric below applies whether the artifact is markdown, slides, a whiteboard photo, or SQL stubs with commentary.
+
+Did the candidate's plan propose a `refund_fact` model rather than dumping refund columns onto `order_fact`?
 
 | Score | Anchor |
 |---|---|
-| 1 | Refund logic crammed into `order_fact` with no separate model; conflates allocation concerns. |
-| 2 | Single refund model exists but conflates line / tender / source concerns into one table. |
-| 3 | Separate `refund_fact` (or equivalent) at a defensible grain. Joins to `order_fact`/`order_line_fact` cleanly. |
-| 4 | `refund_fact` at a clearly justified grain, with an `order_line_fact.refunded_amount` column populated via documented allocation logic. |
-| 5 | Layered model: a raw `refund_fact` preserving source grain, plus derived columns on order/line facts via documented allocation. Treats raw refunds and allocated refunds as different artifacts. |
+| 1 | Plan crams refund logic into `order_fact` with no separate model; conflates allocation concerns. |
+| 2 | Plan describes a single refund model that conflates line / tender / source concerns. |
+| 3 | Plan proposes a separate `refund_fact` (or equivalent) at a defensible grain, with clean joins to `order_fact`/`order_line_fact` described. |
+| 4 | Plan justifies the `refund_fact` grain explicitly; describes an `order_line_fact.refunded_amount` column populated via stated allocation logic. |
+| 5 | Plan describes a layered model: a raw `refund_fact` preserving source grain, plus derived columns on order/line facts via documented allocation. Articulates raw refunds and allocated refunds as different artifacts and explains why. |
 
-### A4. Problem 2 — Allocation decomposition
+**Code bonus (additive, no penalty for absent):** If the candidate also shipped working code matching their plan, +0.5 to this criterion's score (capped at 5). Code that contradicts the plan or is half-built earns nothing extra — the plan is the deliverable.
 
-Does the PR (code or design doc) decompose the three orthogonal allocation concerns?
+### A4. Problem 2 — Allocation decomposition (graded from the plan)
+
+Does the candidate's plan decompose the three orthogonal allocation concerns?
+
+Strong candidates may also flag that cancellations are a separate concern from refunds — cancelled lines never had revenue (cancellation is pre-fulfillment), so they're not part of "net revenue minus refunds". This is credited as bonus signal in A5; A4 grades the three concerns below.
 
 The three concerns:
 1. **Line allocation** — when refund hits at order grain but lines exist (Stripe, internal POS), how to populate `order_line_fact.refunded`.
-2. **Tender allocation** — split-tender refunds; whether store credit reduces revenue.
+2. **Tender allocation** — split-tender refunds. **Note:** all refunds (including store credit) net against revenue per current finance guidance; tender allocation is about *tracking* the split for reconciliation, not about whether store credit reduces the headline number.
 3. **Source reconciliation** — same logical refund across `refunds_shopify` / `refunds_stripe` / `refunds_internal_pos`, no shared ID.
 
 | Score | Anchor |
@@ -92,42 +98,44 @@ The three concerns:
 | 1 | None of the three named or addressed. |
 | 2 | One of three addressed (typically tender, since Jamie volunteers it). |
 | 3 | Two of three named with a stated approach. |
-| 4 | All three named, each with a stated approach and tradeoffs. |
-| 5 | All three named as *orthogonal* concerns (the principal-level insight), with explicit testable invariants for each (e.g., "sum of allocated line refunds == order refund total"). |
+| 4 | All three named, each with a stated approach and tradeoffs articulated to finance. |
+| 5 | All three named as *orthogonal* concerns (the principal-level insight), with explicit testable invariants for each (e.g., "sum of allocated line refunds == order refund total"), and the candidate can defend the choices when finance pushes back. |
 
-### A5. Problem 2 — Planted refund cases
+### A5. Problem 2 — Planted refund cases (graded from the plan)
 
-Does the candidate's work correctly handle (or explicitly call out) the planted refund cases listed in [`answer-key.md`](./answer-key.md)?
+Does the candidate's plan correctly handle (or explicitly call out as testable cases) the planted refund patterns listed in [`answer-key.md`](./answer-key.md)?
 
-The expected handling for each pattern:
+The expected treatment for each pattern:
 
-| Pattern | Expected handling |
+| Pattern | Expected treatment in the plan |
 |---|---|
 | Shopify partial-line refund | Line-level refund flows through to the refunded line only |
-| Internal POS order-level refund (line statuses still `fulfilled`) | Cancel-vs-refund nuance noted; refund applied without changing line status |
-| `shopify_stripe` split-tender (card + store_credit) | Store credit excluded from headline revenue; cash portion reduces revenue. **Multiple instances planted** — see [`answer-key.md`](./answer-key.md). |
+| Internal POS order-level refund (line statuses still `fulfilled`) | Cancel-vs-refund nuance named; refund applied without changing line status |
+| `shopify_stripe` split-tender (card + store_credit) | All refund dollars (card + store_credit) net against revenue. Tender split preserved for reconciliation/tracking, not used to exclude store credit from the headline. **Multiple instances planted** — see [`answer-key.md`](./answer-key.md). |
 
 **Use [`answer-key.md`](./answer-key.md) for the canonical order IDs, amounts, and instance counts** — they regenerate when seeds change.
 
 | Score | Anchor |
 |---|---|
-| 1 | None handled or named. |
-| 2 | One pattern handled. |
-| 3 | Two patterns handled, or all named with deferred handling notes. |
-| 4 | Three patterns handled correctly; any remaining ones explicitly deferred with rationale. |
-| 5 | All patterns handled correctly OR all named as testable cases in a design with a clean slice shipped covering at least two. |
+| 1 | None named or addressed in the plan. |
+| 2 | One pattern named. |
+| 3 | Two patterns named with a stated approach. |
+| 4 | All three patterns named with stated approach; any deferrals have rationale. |
+| 5 | All three named as testable cases with explicit invariants the candidate can articulate to finance. Bonus signal if they also flag the cancellations-vs-refunds distinction. |
 
-### A6. Scoping & artifact quality
+**Common miss to flag:** if the plan treats store credit as *excluding* refunds from the headline number, that's the **old** rule — current guidance is that all refunds (including store credit) net against revenue. Mark down accordingly and note in feedback.
 
-Did the candidate ship a clean slice or muddle through everything?
+### A6. Scoping & artifact quality (presentation-graded)
+
+Q2's deliverable is the plan + walkthrough for finance analytics. Score the artifact + how the candidate framed scope.
 
 | Score | Anchor |
 |---|---|
-| 1 | PR is incomplete in unprincipled ways — half-built models, broken tests, no clear scope. |
-| 2 | Tries to do everything; some pieces work, others are half-done with no documentation of what's missing. |
-| 3 | Clear scope. What's done is done; what's not is acknowledged. |
-| 4 | Clear scope with a deliberate "clean slice" (e.g., Shopify-only `refund_fact`) and documented TODOs for the rest. |
-| 5 | Clean slice + an artifact (design doc, PR description, markdown in repo) tailored to a finance audience surfacing assumptions, open questions, and which questions block prod vs. can be deferred. |
+| 1 | No coherent artifact; walkthrough is rambling or contradicts itself; no scope discipline. |
+| 2 | Artifact exists but is unclear, internally inconsistent, or assumes engineering vocabulary the finance audience doesn't have. |
+| 3 | Clear plan tailored to a finance audience. What's in scope vs. deferred is named. |
+| 4 | Clear plan with a deliberate "clean slice" called out (e.g., "Shopify-only `refund_fact` first") and documented assumptions + open questions. |
+| 5 | Plan tailored to finance, surfaces assumptions and open questions, distinguishes prod-blockers from deferrable concerns, AND the candidate can defend choices live when finance pushes back. Bonus signal if they also shipped code matching the plan. |
 
 ### A7. Boy scout finds *(bonus, +0 to +3 to total)*
 
@@ -153,7 +161,7 @@ Cheap-tier finds available:
 
 These cannot be graded from the PR. The interviewer fills in observations during/after the call; the grading agent scores Section B from those notes.
 
-Interviewer notes should follow the template at [`section-b-notes-template.md`](./section-b-notes-template.md).
+Interviewer notes should follow the template at the bottom of [`interviewer.md`](./interviewer.md#after-the-call).
 
 If interviewer notes are absent, mark each B criterion as "not graded — no observations provided" rather than guessing.
 
@@ -183,15 +191,15 @@ Did the candidate ask Jamie / clarify undocumented columns, or reflexively assum
 
 ### B3. Mode-switching
 
-Did the candidate recognize Problem 2 has a different shape than Problem 1?
+P2's framing now tells the candidate that the deliverable is a plan/walkthrough and that code is bonus. The mode-switching test is no longer "did they realize this isn't a code problem" — that's given. The test is: did they actually invest in *thinking through the modeling* (decomposition, tradeoffs, stakeholder framing), or did they treat the plan as a thin wrapper around "let me write some SQL"?
 
 | Score | Anchor |
 |---|---|
-| 1 | Stayed in code-shipping mode through P2. Built the wrong thing confidently. |
-| 2 | Started in shipping mode; pivoted late after hitting a wall. |
-| 3 | Recognized the shape change after some friction; produced a partial design alongside code. |
-| 4 | Recognized the shape change early; led with decomposition before any SQL. |
-| 5 | Articulated the shape change explicitly ("this is a design problem, not a bug fix"); produced a deliberately scoped artifact (design + clean slice) tailored to the finance audience. |
+| 1 | Ignored the framing; jumped straight to SQL with no plan articulated. The "presentation" was a code walkthrough. |
+| 2 | Built a thin plan as scaffolding for code; little evidence of thinking about modeling tradeoffs. |
+| 3 | Plan + code in roughly equal measure; some decomposition visible, some decisions explained. |
+| 4 | Invested in the plan first; modeling decisions are explained with alternatives considered; code (if shipped) supports the plan rather than driving it. |
+| 5 | Spent the time on modeling judgment — decomposed orthogonal concerns, articulated tradeoffs to a finance audience, anticipated pushback. Whether they shipped code or not is incidental to the score. |
 
 ---
 
