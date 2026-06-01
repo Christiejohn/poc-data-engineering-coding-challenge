@@ -42,3 +42,14 @@ duckdb -readonly warehouse.duckdb
 ## Bring your own AI tool
 
 Claude Code, Cursor, Codex, etc. — bring whatever you're fast in.
+
+## Submitting your work
+
+This repo is owned by the Extend org, so you can't push branches directly to it. Instead, submit via a fork:
+
+1. Fork this repo to your own GitHub account (the "Fork" button, top-right on GitHub). With the `gh` CLI: `gh repo fork helloextend/poc-data-engineering-coding-challenge --clone`.
+2. Do your work on a branch in your fork.
+3. Push your branch to your fork.
+4. Open a Pull Request targeting `helloextend/poc-data-engineering-coding-challenge:master`. With the `gh` CLI: `gh pr create --repo helloextend/poc-data-engineering-coding-challenge --base master --head <your-github-username>:<your-branch>`.
+
+The PR will appear in this repo's Pull Requests tab. An Extend team member will review it there.
